@@ -1,0 +1,11 @@
+patient_id,age,gender,admission_date,discharge_date,diagnosis
+P001,35,Male,2025-01-10,2025-01-15,Flu
+P002,64,Female,2025-02-05,2025-02-10,Diabetes
+P003,42,Male,2025-03-12,2025-03-16,Fracture
+P004,57,Female,2025-04-20,2025-04-25,Asthma
+P005,29,Male,2025-05-01,2025-05-06,Allergy
+P006,38,Female,2025-06-10,2025-06-15,Infection
+P007,60,Male,2025-07-08,2025-07-14,Hypertension
+P008,23,Female,2025-08-03,2025-08-08,Fever
+P009,49,Male,2025-09-20,2025-09-25,Arthritis
+P010,33,Female,2025-10-11,2025-10-16,Headache
