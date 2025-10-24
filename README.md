@@ -1,190 +1,94 @@
-# Serverless Healthcare Data Quality & Compliance Checker
+# healthcare_data_quality_pipeline  
+# 🩺 End-to-End Healthcare Data Quality & AI Insights Pipeline  
+# Building a Serverless Data Engineering Solution with AWS Lambda, Step Functions, and S3  
 
-This project demonstrates a robust, automated pipeline for ensuring data quality, standardization, and compliance of healthcare data ingested into a data lake. It acts as a crucial gatekeeper, preventing low-quality or non-compliant data from reaching downstream analytics systems.
+🔥 **Introduction**
 
-## Architecture Overview
+This repository showcases how to design and deploy a **modern, serverless data engineering pipeline** on AWS for automated healthcare data validation and AI-powered insights.  
+The architecture integrates **AWS Lambda**, **Step Functions**, and **S3** to build a scalable, event-driven workflow capable of cleansing, validating, and analyzing healthcare data without managing any servers.
 
-The solution leverages AWS serverless services and the Great Expectations framework to create an event-driven data quality workflow:
+With its modular and automated design, this solution ensures:
 
-1.  **Ingestion**: Raw healthcare data (e.g., patient CSV files) is uploaded to an S3 "Raw Data" bucket.
-2.  **Trigger**: An S3 ObjectCreated event on the `RawDataBucket` invokes an `InitiatorFunction` Lambda.
-3.  **Orchestration**: The `InitiatorFunction` starts an AWS Step Functions state machine, passing the S3 bucket and key of the newly ingested file.
-4.  **Data Quality Check**: The Step Functions workflow first invokes the `QualityCheckerFunction` Lambda. This function downloads the raw data and runs a Great Expectations suite against it, checking for common healthcare data issues (e.g., valid patient IDs, correct ICD-10 codes, reasonable dates, age ranges).
-5.  **Routing**: Based on the Great Expectations validation result, the Step Functions state machine makes a choice:
-    *   **PASS**: If the data passes all quality checks, it proceeds to the `TransformData` step.
-    *   **FAIL**: If the data fails any quality checks, it proceeds to the `MoveToQuarantine` step.
-6.  **Quarantine**: The `MoveToQuarantine` Lambda function copies the original raw file to a "Quarantined Data" S3 bucket and then deletes it from the `RawDataBucket`. The workflow then ends.
-7.  **Transformation & Curated Storage**: For data that passes validation, the `TransformerFunction` Lambda downloads the raw CSV, converts it to Parquet format, and uploads it to a "Curated Data" S3 bucket. The original raw CSV is then deleted from the `RawDataBucket`. The workflow then ends successfully.
+- Continuous event-based data validation and cleansing.  
+- AI-driven anomaly detection for accurate insights.  
+- Serverless scalability with zero maintenance.  
+- A full end-to-end data lifecycle — from ingestion to insights.
 
-```
-+-----------------------+
-|  S3 Raw Data Bucket   |
-| (e.g., patient.csv)   |
-+-----------+-----------+
-            | ObjectCreate Event
-            V
-+-----------+-----------+
-| Initiator Lambda      |
-| (Start Step Function) |
-+-----------+-----------+
-            | Start Execution
-            V
-+-------------------------------------------------------------+
-|                   AWS Step Functions Workflow               |
-|   +-------------------+    +-------------------+            |
-|   | RunQualityChecks  | -> | CheckValidation   |            |
-|   | (QualityChecker   |    | (Choice State)    |            |
-|   |   Lambda)         |    +---------+---------+            |
-|   +-------------------+              |                      |
-|                                      | Fail                 |
-|                                      V                      |
-|                               +------+--------+             |
-|                               | MoveToQuarantine|           |
-|                               | (Mover Lambda)  |           |
-|                               +------+--------+             |
-|                                      | End (Failure)        |
-|                                      V                      |
-|         Pass                       +-----------------------+
-|         +------------------------->| TransformData         |
-|         |                          | (Transformer Lambda)  |
-|         V                          +----------+------------+
-|   +-----------+                               |            |
-|   |           |                               V            |
-|   |  Success  |                          +-----------------------+
-|   |           |                          |  S3 Curated Data      |
-|   +-----------+                          | (e.g., patient.parquet)|
-|                                          +-----------------------+
-+-------------------------------------------------------------+
-```
+Whether you’re a **data engineer**, **cloud architect**, or **AI developer**, this project demonstrates a complete AWS-native solution for healthcare-grade data pipelines.
 
-## AWS Services Used
+---
 
-*   **Amazon S3**: Scalable object storage for raw, quarantined, and curated data.
-*   **AWS Lambda**: Serverless compute for event-driven functions (Initiator, Quality Checker, Transformer, Mover).
-*   **AWS Step Functions**: Serverless workflow orchestration to manage the multi-step data pipeline with built-in error handling and state management.
-*   **AWS IAM**: Manages permissions for Lambda functions and Step Functions to interact with other AWS services.
-*   **AWS Serverless Application Model (SAM)**: Infrastructure as Code framework to define and deploy all serverless resources.
-*   **Great Expectations**: Open-source data quality framework used within the `QualityCheckerFunction` to define and validate data expectations.
+## 📊 Project Architecture
 
-## Generated Files
+![Project Architecture](assets/healthcare_pipeline_architecture.png)
 
-This project contains the following files and directories:
+---
 
-```
-.gitignore
-README.md
-requirements.txt
-samconfig.toml
-template.yaml
+## 💡 Why This Architecture Matters
 
-great_expectations/
-├── checkpoints/
-│   └── health_data_checkpoint.py  # Dummy file, checkpoint defined in great_expectations.yml
-├── great_expectations.yml
-└── expectations/
-    └── health_data_suite.json
+In the healthcare industry, **data quality directly impacts analytics and decision-making**.  
+Manual ETL processes are slow, inconsistent, and hard to scale when dealing with large datasets.  
 
-sample_data/
-├── patient_records.csv        # Sample good data
-└── patient_records_bad.csv    # Sample bad data to test quarantine
+This serverless architecture provides:
 
-scripts/
-└── ingest.py                  # Helper script to simulate data ingestion to S3
+- ⚡ **Event-driven automation:** Trigger workflows automatically when new data is uploaded.  
+- 🧹 **Data quality enforcement:** Cleans and validates healthcare records using Python and Pandas.  
+- 🧠 **AI anomaly detection:** Flags invalid or unusual data (e.g., wrong ages, invalid discharge dates).  
+- ☁️ **Serverless scalability:** AWS manages all compute — no infrastructure to maintain.  
+- 🔒 **Secure and compliant:** IAM policies and S3 encryption ensure data safety.  
 
-src/
-├── initiator/
-│   └── app.py                 # Lambda to trigger Step Functions from S3 event
-├── mover/
-│   └── app.py                 # Lambda to move failed files to quarantine
-├── quality_checker/
-│   └── app.py                 # Lambda to run Great Expectations data quality checks
-│   └── great_expectations/    # Great Expectations project embedded for deployment
-│       ├── ...                # (Contents of great_expectations/ - same as root GE dir)
-└── transformer/
-    └── app.py                 # Lambda to transform CSV to Parquet
-```
+---
 
-## Prerequisites
+## 🧩 Pipeline Overview
 
-Before deploying and running this project, ensure you have the following installed:
+The pipeline is divided into several AWS-native components:
 
-*   **AWS CLI**: Configured with credentials that have sufficient permissions to deploy and manage serverless applications (`AdministratorAccess` for simplicity, or more granular permissions).
-*   **AWS SAM CLI**: Version 1.100.0 or later.
-*   **Python 3.8+**: The runtime for the Lambda functions and helper scripts.
-*   **Docker**: Required by `sam build --use-container` to build Lambda functions with Python dependencies.
+1. **Raw S3 Bucket** – Receives new patient record CSV uploads.  
+2. **Initiator Lambda** – Detects new uploads and triggers the Step Function workflow.  
+3. **Transformer Lambda** – Cleans and validates raw CSV data.  
+4. **AI Analyzer Lambda** – Runs anomaly detection and generates JSON insight reports.  
+5. **Mover Lambda** – Moves invalid files to the Quarantine bucket.  
+6. **Curated S3 Bucket** – Stores clean, validated healthcare data.  
+7. **Insights S3 Bucket** – Stores AI-generated reports summarizing data quality metrics.  
 
-## Deployment Steps
+---
 
-1.  **Clone the repository** (if applicable) or create the project structure from the generated files.
-2.  **Build the SAM application**: This command packages your Lambda code and dependencies.
-    ```bash
-    sam build --use-container
-    ```
-    *Note: `--use-container` ensures that dependencies are built in a Lambda-like environment, preventing compatibility issues.*
-3.  **Deploy the SAM application**: This command deploys your serverless resources to AWS.
-    ```bash
-    sam deploy --guided
-    ```
-    *   When prompted for `Stack Name`, provide a unique name (e.g., `HealthcareDataQualityStack`).
-    *   For `AWS Region`, choose your desired AWS region (e.g., `us-east-1`).
-    *   Confirm changes before deployment (yes).
-    *   Allow SAM CLI to create IAM roles (yes).
-    *   Save arguments to `samconfig.toml` (yes).
+## ⚙️ Pipeline Components
 
-    The deployment will create the S3 buckets, Lambda functions, IAM roles, and the Step Functions state machine.
+### **Initiator Lambda**
+- Invoked automatically by S3 upload events.  
+- Starts the Step Function workflow.  
 
-4.  **Retrieve S3 Bucket Name**: After successful deployment, SAM CLI will output the names of the created S3 buckets. Note the `RawDataBucketName` as you'll need it for ingestion.
-    Alternatively, you can find the bucket names in the AWS S3 console or by running:
-    ```bash
-    aws cloudformation describe-stacks --stack-name <YOUR_STACK_NAME> --query 'Stacks[0].Outputs'
-    ```
+### **Transformer Lambda**
+- Reads raw CSVs from S3.  
+- Cleans and standardizes data (e.g., fixes columns, removes nulls).  
+- Writes curated data to the Curated bucket.  
 
-## Running the Project
+### **AI Analyzer Lambda**
+- Scans curated data for invalid or abnormal values.  
+- Generates structured JSON reports summarizing data anomalies.  
+- Writes reports to the Insights bucket.  
 
-To test the data quality workflow, you will simulate data ingestion using the provided `ingest.py` script.
+### **Mover Lambda**
+- Moves invalid or rejected data files to the Quarantine bucket for review.  
 
-### 1. Ingest Good Data (Expected: Pass Validation, Transform to Parquet)
+### **Step Function**
+- Orchestrates the end-to-end flow:  
+  `Initiator → Transformer → AI Analyzer → Mover (if needed)`
 
-Use the `patient_records.csv` file, which is designed to pass all Great Expectations checks.
+---
 
-```bash
-python scripts/ingest.py <YourRawDataBucketName> sample_data/patient_records.csv
-```
+## 🧠 Example Insight Report
 
-**Expected Outcome:**
-
-*   The file `patient_records.csv` will be uploaded to your `RawDataBucket`.
-*   This will trigger the Step Functions workflow.
-*   The `QualityCheckerFunction` will validate the data, and it should pass.
-*   The `TransformerFunction` will convert the `patient_records.csv` to `patient_records.parquet` and upload it to the `CuratedDataBucket`.
-*   The original `patient_records.csv` will be deleted from the `RawDataBucket`.
-*   You should see `patient_records.parquet` in your `CuratedDataBucket`.
-*   Monitor the AWS Step Functions console for the execution status. It should succeed.
-
-### 2. Ingest Bad Data (Expected: Fail Validation, Move to Quarantine)
-
-Use the `patient_records_bad.csv` file, which contains deliberately introduced data quality issues to fail the Great Expectations checks.
-
-```bash
-python scripts/ingest.py <YourRawDataBucketName> sample_data/patient_records_bad.csv
-```
-
-**Expected Outcome:**
-
-*   The file `patient_records_bad.csv` will be uploaded to your `RawDataBucket`.
-*   This will trigger the Step Functions workflow.
-*   The `QualityCheckerFunction` will validate the data, and it should fail due to the bad data.
-*   The `MoveToQuarantine` Lambda will copy `patient_records_bad.csv` to the `QuarantinedDataBucket`.
-*   The original `patient_records_bad.csv` will be deleted from the `RawDataBucket`.
-*   You should see `patient_records_bad.csv` in your `QuarantinedDataBucket`.
-*   Monitor the AWS Step Functions console for the execution status. The execution should end with a 'Failed' status, specifically at the `MoveToQuarantine` step.
-
-## Cleanup
-
-To remove all deployed AWS resources and avoid incurring unwanted charges, run the following command:
-
-```bash
-sam delete --stack-name <YOUR_STACK_NAME>
-```
-
-Replace `<YOUR_STACK_NAME>` with the stack name you used during deployment (e.g., `HealthcareDataQualityStack`). Confirm the deletion when prompted.
+```json
+{
+  "file": "patient_records.csv",
+  "timestamp": "2025-10-23T19:05:00Z",
+  "records": 500,
+  "anomalies_detected": 3,
+  "fields_flagged": ["age", "discharge_date"],
+  "sample_anomalies": [
+    {"row": 23, "reason": "age_out_of_range"},
+    {"row": 45, "reason": "discharge_before_admission"}
+  ]
+}
