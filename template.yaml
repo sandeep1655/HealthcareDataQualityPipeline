@@ -1,0 +1,192 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Healthcare Data Quality Pipeline (Lambda-only + AI Insights)
+  Clean version without Custom::S3Notification to prevent delete failures.
+
+Globals:
+  Function:
+    Runtime: python3.9
+    Timeout: 300
+    MemorySize: 512
+
+Resources:
+
+  #########################################################
+  # S3 BUCKETS
+  #########################################################
+
+  RawDataBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  CuratedDataBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  QuarantinedDataBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  InsightsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  #########################################################
+  # STEP FUNCTIONS
+  #########################################################
+
+  HealthcarePipelineStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: HealthcareDataPipelineStateMachine
+      DefinitionUri: workflow.asl.json
+      DefinitionSubstitutions:
+        TransformerFunctionArn: !GetAtt TransformerFunction.Arn
+        AIAnalyzerFunctionArn: !GetAtt AIAnalyzerFunction.Arn
+        MoverFunctionArn: !GetAtt MoverFunction.Arn
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref TransformerFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref AIAnalyzerFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref MoverFunction
+
+  #########################################################
+  # LAMBDA FUNCTIONS
+  #########################################################
+
+  InitiatorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/initiator/
+      Handler: app.lambda_handler
+      Description: Triggers Step Functions workflow on file upload
+      Environment:
+        Variables:
+          StepFunctionsStateMachineArn: !Ref HealthcarePipelineStateMachine
+      Policies:
+        - StepFunctionsExecutionPolicy:
+            StateMachineName: !Ref HealthcarePipelineStateMachine
+
+  TransformerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/transformer/
+      Handler: app.lambda_handler
+      Description: Cleans and moves data from Raw to Curated bucket
+      Environment:
+        Variables:
+          CuratedDataBucketName: !Ref CuratedDataBucket
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref RawDataBucket
+        - S3WritePolicy:
+            BucketName: !Ref CuratedDataBucket
+        - Statement:
+            Effect: Allow
+            Action:
+              - s3:DeleteObject
+            Resource: !Sub "${RawDataBucket.Arn}/*"
+
+  AIAnalyzerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/ai_analyzer/
+      Handler: app.lambda_handler
+      Description: Runs AI text analytics and anomaly detection at the end
+      Environment:
+        Variables:
+          InsightsBucketName: !Ref InsightsBucket
+          InsightsPrefix: "insights/"
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref CuratedDataBucket
+        - S3WritePolicy:
+            BucketName: !Ref InsightsBucket
+
+  MoverFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/mover/
+      Handler: app.lambda_handler
+      Description: Moves anomalous or invalid files to Quarantine
+      Environment:
+        Variables:
+          QuarantinedDataBucketName: !Ref QuarantinedDataBucket
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref CuratedDataBucket
+        - S3WritePolicy:
+            BucketName: !Ref QuarantinedDataBucket
+        - Statement:
+            Effect: Allow
+            Action:
+              - s3:DeleteObject
+            Resource: !Sub "${CuratedDataBucket.Arn}/*"
+
+  #########################################################
+  # SIMPLE S3 EVENT NOTIFICATION (No Custom Resource)
+  #########################################################
+
+  InitiatorInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref InitiatorFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !GetAtt RawDataBucket.Arn
+
+  RawDataBucketNotification:
+    Type: AWS::S3::BucketNotification
+    Properties:
+      Bucket: !Ref RawDataBucket
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: "s3:ObjectCreated:*"
+            Function: !GetAtt InitiatorFunction.Arn
+    DependsOn:
+      - InitiatorInvokePermission
+
+#########################################################
+# OUTPUTS
+#########################################################
+
+Outputs:
+  RawDataBucketName:
+    Description: Raw S3 bucket for incoming data
+    Value: !Ref RawDataBucket
+  CuratedDataBucketName:
+    Description: Curated S3 bucket for cleaned data
+    Value: !Ref CuratedDataBucket
+  QuarantinedDataBucketName:
+    Description: Quarantine S3 bucket for bad data
+    Value: !Ref QuarantinedDataBucket
+  InsightsBucketName:
+    Description: S3 bucket where AI analyzer writes insights
+    Value: !Ref InsightsBucket
+  StateMachineArn:
+    Description: Step Function ARN for the Healthcare Pipeline
+    Value: !Ref HealthcarePipelineStateMachine

@@ -1,0 +1,52 @@
+{
+  "Comment": "Lambda-only Healthcare Data Pipeline with AI Insights at End",
+  "StartAt": "TransformData",
+  "States": {
+    "TransformData": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${TransformerFunctionArn}",
+        "Payload.$": "$"
+      },
+      "ResultPath": "$.TransformResult",
+      "Next": "RunAIAnalyzer"
+    },
+    "RunAIAnalyzer": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${AIAnalyzerFunctionArn}",
+        "Payload.$": "$.TransformResult.Payload"
+      },
+      "ResultPath": "$.AIResult",
+      "Next": "CheckAIResult"
+    },
+    "CheckAIResult": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.AIResult.Payload.anomalies_detected",
+          "NumericGreaterThan": 0,
+          "Next": "MoveToQuarantine"
+        }
+      ],
+      "Default": "Success"
+    },
+    "MoveToQuarantine": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${MoverFunctionArn}",
+        "Payload": {
+          "s3_input_bucket.$": "$.TransformResult.Payload.s3_output_bucket",
+          "s3_input_key.$": "$.TransformResult.Payload.s3_output_key"
+        }
+      },
+      "End": true
+    },
+    "Success": {
+      "Type": "Succeed"
+    }
+  }
+}

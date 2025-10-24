@@ -1,0 +1,73 @@
+# great_expectations.yml
+
+# This config will be used by the QualityCheckerFunction Lambda
+# It defines a simple "runtime" data source that takes a pandas DataFrame directly
+# and a checkpoint to run a specific expectation suite.
+
+# Configuration for Great Expectations
+config_version: 3
+datasources:
+  my_s3_datasource:
+    module_name: great_expectations.datasource
+    class_name: Datasource
+    execution_engine:
+      class_name: PandasExecutionEngine
+    data_connectors:
+      default_runtime_data_connector:
+        class_name: RuntimeDataConnector
+        module_name: great_expectations.datasource.data_connector
+        batch_identifiers:
+          - pipeline_run_id
+          - data_asset_name
+# Storing validation results
+stores:
+  evaluation_parameter_store:
+    class_name: EvaluationParameterStore
+  expectations_store:
+    class_name: ExpectationStore
+    store_backend:
+      class_name: TupleFilesystemStoreBackend
+      base_directory: expectations/
+  validations_store:
+    class_name: ValidationsStore
+    store_backend:
+      class_name: TupleFilesystemStoreBackend
+      base_directory: uncommitted/validations/
+  checkpoint_store:
+    class_name: CheckpointStore
+    store_backend:
+      class_name: TupleFilesystemStoreBackend
+      base_directory: checkpoints/
+
+# DataDocs (optional, not used in Lambda for simplicity but good for local dev)
+data_docs_sites:
+  local_site:
+    class_name: SiteBuilder
+    store_backend:
+      class_name: TupleFilesystemStoreBackend
+      base_directory: uncommitted/data_docs/
+    site_section_order:
+      - data_asset
+      - expectation_suites
+      - validations
+
+anonymous_usage_statistics:
+  enabled: false
+
+checkpoints:
+  health_data_checkpoint:
+    class_name: Checkpoint
+    run_name_template: "%Y%m%d-%H%M%S-validation"
+    action_list:
+      - name: store_validation_result
+        action:
+          class_name: StoreValidationResultAction
+      - name: update_data_docs
+        action:
+          class_name: UpdateDataDocsAction
+    batches:
+      - batch_request:
+          datasource_name: my_s3_datasource
+          data_connector_name: default_runtime_data_connector
+          data_asset_name: patient_records
+        expectation_suite_name: health_data_suite
