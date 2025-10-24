@@ -1,0 +1,32 @@
+# --- AWS SAM build artifacts ---
+.aws-sam/
+.aws-sam-build/
+*.zip
+
+# --- Python cache ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# --- Virtual environments ---
+.venv/
+env/
+venv/
+ENV/
+*.egg-info/
+
+# --- Logs ---
+*.log
+
+# --- Environment / Config files ---
+.env
+.env.*
+*.json.tmp
+*.csv.tmp
+
+# --- IDE / Editor specific ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
